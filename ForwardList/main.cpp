@@ -1,204 +1,457 @@
-#include<iostream>
-using namespace std;
-#define tab "\t"
-#define BASE_CHECK
+#include <iostream>
 
+#define tab "\t"
+//#define DEBUG
+
+template <class T>
+class ForwardList;
+
+template <class T>
 class Element
 {
-    int Data;
-    Element* pNext;
-    static int count;
+    T data_;
+    Element *pNext;
+
 public:
-    
-    Element(int Data, Element* pNext = nullptr): Data(Data), pNext(pNext)
+    Element(T data = T{}, Element *pNext = nullptr) : data_(data), pNext(pNext)
     {
-        count ++;
-        //cout << "EConstructor: \t" << this << endl;
+#ifdef DEBUG
+        std::cout << "EConstrcutor:\t" << this << std::endl;
+#endif
     }
-    
-    ~Element ()
+    ~Element()
     {
-        count --;
-        //cout << "EDestructor:\t" << this << endl;
+#ifdef DEBUG
+        std::cout << "EDestrcutor:\t" << this << std::endl;
+#endif
     }
-    friend class ForwardList;
+
+    Element const *const &next() const
+    {
+        return pNext;
+    }
+
+    Element *&next()
+    {
+        return pNext;
+    }
+
+    T const &data() const
+    {
+        return data_;
+    }
+
+    T &data()
+    {
+        return data_;
+    }
+
+    friend class ForwardList<T>;
 };
 
-int Element::count = 0;
-
-class ForwardList // односвязный (однонаправленный) список
+template <class T>
+class ForwardList
 {
-    Element* Head; // Голова списка, указывает на начальный элемент списка
-    unsigned int size; // размер списка
-    
-public:
-    ForwardList()
+    using _node = Element<T>;
+
+    _node *head_;
+    size_t size_;
+
+    template <class _FLNodeType, class _FLNodePtr, class _FLNodeRef>
+    class iterator_impl
     {
-        Head = nullptr; // Если голова указывает на 0, то список пуст
-        size = 0;
-        //cout << "LConstructor: \t" << this << endl;
+        _FLNodePtr ptr_;
+
+    public:
+        using _Self = ForwardList::iterator_impl<_FLNodeType, _FLNodePtr, _FLNodeRef>;
+
+        using difference_type = std::ptrdiff_t; // auto size pointer
+        using iterator_category = std::forward_iterator_tag;
+
+        iterator_impl() : ptr_(nullptr) {}
+        iterator_impl(_FLNodePtr p) : ptr_(p) {}
+        iterator_impl(const _Self &) = default;
+        iterator_impl(_Self &&) = default;
+        _Self &operator=(_Self &&) = default;
+        _Self &operator=(const _Self &) = default;
+
+        _Self &operator++()
+        {
+            ptr_ = ptr_->next();
+            return *this;
+        }
+
+        _Self operator++(int)
+        {
+            _Self temp(*this);
+            ptr_ = ptr_->next();
+            return temp;
+        }
+
+        decltype(ptr_->data()) operator*()
+        {
+            return ptr_->data();
+        }
+
+        decltype(&(ptr_->data())) operator->()
+        {
+            return &(ptr_->data());
+        }
+
+        bool operator!=(const _Self &it) const
+        {
+            return ptr_ != it.ptr_;
+        }
+
+        bool operator==(const _Self &it) const
+        {
+            return ptr_ == it.ptr_;
+        }
+    };
+
+    template <class It>
+    _node *advance(_node *iter, size_t distance)
+    {
+        if (distance > size_)
+            throw "Forward list out of bounds";
+
+        for (size_t i = 0; i < distance; ++i)
+        {
+            iter = iter->pNext;
+        }
+        return iter;
     }
+
+public:
+    using iterator = ForwardList::iterator_impl<_node, _node *, _node &>;
+    using const_iterator = ForwardList::iterator_impl<const _node, const _node *, const _node &>;
+
+    ForwardList() noexcept : head_(nullptr), size_(0)
+    {
+#ifdef DEBUG
+        std::cout << "LConstructor:\t" << this << std::endl;
+#endif
+    }
+
+    ForwardList(size_t size) : ForwardList()
+    {
+        while (size_ != size)
+        {
+            this->push_front(T());
+        }
+    }
+
+    ForwardList(std::initializer_list<T> il) : ForwardList()
+    {
+        for (T val : il)
+        {
+            this->push_front(val);
+        }
+    }
+
     ~ForwardList()
     {
-        //cout << "LDestructor:\t" << this << endl;
+        while (head_)
+        {
+            this->pop_front();
+        }
+#ifdef DEBUG
+        std::cout << "LDestructor:\t" << this << std::endl;
+#endif
     }
-    // MARK: -- ADDING ELEMENTS
-    
-    void push_front(int Data)
+
+    ForwardList(ForwardList<T> const &other) : ForwardList()
     {
-        Element* New = new Element(Data); // создаем новый элемент и помещаем в него значение Data
-        New -> pNext = Head; // привязываем новый элемент в начало списка
-        Head = New; //переводим голову на новый элемент
-        size ++;
+        for (T i : other)
+            this->push_front(i);
+        this->reverse();
     }
-    void push_back(int Data)
+
+    ForwardList(ForwardList<T> &&other)
     {
-        // Проверяем, является ли список пустым.
-        if (Head == nullptr)
-            return push_front(Data);
-        // 1. Создаем новый элемент:
-        Element* New = new Element(Data);
-        // 2. Доходим до конца списка:
-        Element* Temp = Head;
-        while(Temp -> pNext)// пока pNext текущего элемента не 0
-            Temp = Temp -> pNext; // переходим на следующий элемент
-        // Теперь находимся в последнем элементе, то есть Temp -> pNext == nullptr
-        // Теперь мы находимся в последнем элементе
-        // 3. Присоединяем новый элемент к последнему:
-        Temp -> pNext = New;
-        size ++;
+        _node *tmp = this->head_;
+
+        this->head_ = other.head_;
+        this->size_ = other.size_;
+
+        other.head_ = tmp;
     }
-    // MARK: -- REMOVING ELEMENTS:
-    
-    void pop_front()
+
+    ForwardList<T> &operator=(const ForwardList<T> &other)
     {
-        if (Head == nullptr) return; // проверка на заполненность списка
-        // 1. Запоминаем адрес удаляемого элемента:
-        Element* Erased = Head;
-        // 2. Исключаем удаляемый элемент из списка
-        Head = Erased -> pNext;
-        // 3. Удаляем элемент из памяти:
-        delete Erased;
-        size --;
+        if (this == &other)
+            return *this;
+        ForwardList<T> to_delete = std::move(*this);
+        new (this) ForwardList(other);
+        return *this;
     }
+
+    ForwardList<T> &operator=(ForwardList<T> &&other)
+    {
+        if (this == &other)
+            return *this;
+
+        _node *tmp = this->head_;
+
+        this->head_ = other.head_;
+        this->size_ = other.size_;
+
+        other.head_ = tmp;
+        return *this;
+    }
+
+    inline void push_front(T data)
+    {
+        head_ = new Element<T>(data, head_);
+
+        ++this->size_;
+    }
+
+    void push_back(T data)
+    {
+        if (head_ == nullptr)
+            return this->push_front(data);
+        _node *iter = ForwardList::advance(head_, size_ - 1);
+        iter->pNext = new Element(data);
+        ++this->size_;
+    }
+
+    inline void pop_front()
+    {
+        if (head_ == nullptr)
+            return;
+
+        _node *temp = head_;
+        head_ = head_->pNext;
+        delete temp;
+
+        --this->size_;
+    }
+
     void pop_back()
     {
-        if (Head == nullptr) return;
-        if (Head -> pNext == nullptr) return pop_front();
-        // 1. Доходим до предпоследнего элемента
-        Element* Temp = Head; // создаем итератор
-        while(Temp->pNext->pNext) Temp = Temp->pNext;
-        // 2. Удаляем элемент их памяти:
-        delete Temp -> pNext;
-        // 3. Затираем адрес удаленного элемента нулем
-        Temp -> pNext = nullptr;
-        size --;
-    }
-    void insert(int index, int Data)
-    {
-        if (index == 0 || Head == nullptr) return push_front(Data);
-        if (index > size) return;
-        Element* New = new Element(Data);
-        // 1. Доходим до нужного элемента
-        Element* Temp = Head;
-        for (int i = 0; i < index - 1; ++i)
-        {
-            Temp = Temp -> pNext;
-        }
-        // 2. Включаем новый элемент в список:
-        New -> pNext = Temp -> pNext;
-        Temp -> pNext = New;
-        size ++;
-    }
-    void erase(int index)
-    {
-        if (index > size) return;
-        if (index == 0) return pop_front();
-        // 1. Доходим до нужного объекта
-        Element* Temp = Head;
-        for (int i = 0; i < index - 1; ++i) {
-            Temp = Temp -> pNext;
-        }
-        // 2. Запоминаем адрес удаляемого элемента:
-        Element* Erased = Temp -> pNext;
-        // 3. Исключаем элемент из списка
-        Temp -> pNext = Temp -> pNext -> pNext;
-        // 4. Удаляем элемент из памяти
-        delete Erased;
-        size --;
+        if (head_ == nullptr)
+            return;
+        if (head_->pNext == nullptr)
+            return this->pop_front();
+        _node *iter = ForwardList::advance(head_, size_ - 2);
+        delete iter->pNext;
+        iter->pNext = nullptr;
 
+        --this->size_;
     }
-    
-    // MARK: -- METHODS:
-    
-    void print()const
+
+    void insert(size_t index, T data)
     {
-        Element* Temp = Head; // Temp это итератор
-        // Итератор это указатель, при помощи которого нужно получить доступ к следующему элементу структуры данных
-        while (Temp) // пока итератор содержит не нулевой адрес
+        if (index == 0 or head_ == nullptr)
+            return this->push_front(data);
+        _node *iter = ForwardList::advance(head_, index - 1);
+        _node *temp = iter->pNext;
+        iter->pNext = new Element(data, temp);
+        ++this->size_;
+    }
+
+    void erase(size_t index)
+    {
+        if (index == 0)
+            return this->pop_front();
+        _node *iter = ForwardList::advance(head_, index - 1);
+        if (iter->pNext == nullptr)
+            throw "No element at given index";
+        _node *temp = iter->pNext->pNext;
+        delete iter->pNext;
+        iter->pNext = temp;
+        --this->size_;
+    }
+
+    void unique()
+    {
+        Element<T> *to_unique = this->head_;
+        Element<T> *to_find = nullptr;
+
+        for (size_t unique_idx = 0; to_unique; ++unique_idx, to_unique = to_unique->pNext)
         {
-            cout << Temp << tab << Temp -> Data << tab << Temp -> pNext << endl;
-            Temp = Temp -> pNext; // переход на следующий элемент
+            to_find = to_unique->pNext;
+
+            for (size_t idx_to_remove = unique_idx + 1; to_find; ++idx_to_remove)
+            {
+                if (to_unique->data_ == to_find->data_)
+                {
+                    to_find = to_find->pNext;
+                    this->erase(idx_to_remove);
+                    --idx_to_remove;
+                }
+                else
+                {
+                    to_find = to_find->pNext;
+                }
+            }
         }
-        cout << "Element's count of the list: " << size << endl;
-        cout << "General count of elements: " << Head -> count << endl;
+    }
+
+    void reverse()
+    {
+        _node *prev = nullptr;
+        _node *next = this->head_;
+        _node *temp = nullptr;
+        for (size_t idx = 0; idx < size_; ++idx)
+        {
+            temp = next->pNext;
+            next->pNext = prev;
+            prev = next;
+            next = temp;
+        }
+        this->head_ = prev;
+    }
+
+    T operator[](size_t index) const
+    {
+        return ForwardList::advance(head_, index)->data_;
+    }
+
+    T &operator[](size_t index)
+    {
+        return ForwardList::advance(head_, index)->data_;
+    }
+
+    bool is_empty() const { return !head_; }
+
+    void print() const
+    {
+        for (auto Temp = head_; Temp; Temp = Temp->pNext)
+        {
+            std::cout << Temp << tab << Temp->data_ << tab << Temp->pNext << std::endl;
+        }
+    }
+
+    ForwardList::const_iterator begin() const
+    {
+        return ForwardList::const_iterator(head_);
+    }
+
+    ForwardList::const_iterator end() const
+    {
+        return ForwardList::const_iterator();
+    }
+
+    ForwardList::iterator begin()
+    {
+        return ForwardList::iterator(head_);
+    }
+
+    ForwardList::iterator end()
+    {
+        return ForwardList::iterator();
     }
 };
+
+// #define BASE_CHECK
+// #define DESTRUCTOR_CHECK
+// #define HOME_WORK_1
+// #define HOME_WORK_2
+#define RANGE_BASE_FOR_LIST
+
+ForwardList<int> func()
+{
+    return ForwardList<int>({ 4, 3, 2, 1 });
+}
 
 int main()
 {
-    
 #ifdef BASE_CHECK
     int n;
-    cout << "Enter the size of the list: "; cin >> n;
-    ForwardList list;
-    for(int i = 0; i < n; ++i)
+    std::cout << "Enter list size: ";
+    std::cin >> n;
+    ForwardList<int> list;
+    list.pop_front();
+    for (int i = 0; i < n; i++)
     {
-        //list.push_front(rand() % 100);
+        // list.push_front(rand() % 100);
         list.push_back(rand() % 100);
     }
     list.print();
-   /*
-    list.push_back(123);
+    // list.push_back(123);
+    // list.pop_front();
+    // list.pop_back();
+
+    int index;
+    int value;
+    std::cout << "Enter index INSERT element: ";
+    std::cin >> index;
+    std::cout << "Enter value INSERT element: ";
+    std::cin >> value;
+
+    list.insert(index, value);
     list.print();
-    cout << endl;
-    list.pop_front();
-    list.pop_back();
-    list.print();
-    cout << endl;
-    */
-    
-    int index = 0;
-    int value = 0;
-    
-    cout << "Enter index: "; cin >>  index;
-//    cout << "Enter value: "; cin >> value;
-//    list.insert(index, value);
-//    list.print();
-    cout << endl;
+
+    std::cout << "Enter index ERASE element: ";
+    std::cin >> index;
     list.erase(index);
     list.print();
-    
-    
+
 #endif // BASE_CHECK
 
-    /*
-    ForwardList list1;
-    list1.push_back(3);
-    list1.push_back(5);
-    list1.push_back(8);
-    list1.push_back(13);
-    list1.push_back(21);
-    list1.print();
-    
-    cout << endl;
-    
-    ForwardList list2;
-    list2.push_back(34);
-    list2.push_back(55);
-    list2.push_back(89);
-    list2.print();
-   */
-    
-    return 0;
+    // ForwardList<int> list1;
+    // list1.push_back(3);
+    // list1.push_back(5);
+    // list1.push_back(8);
+    // list1.push_back(13);
+    // list1.push_back(21);
+    // list1.pop_back();
+    // list1.pop_front();
+    // list1.print();
+
+#ifdef DESTRUCTOR_CHECK
+    int n;
+    std::cout << "Enter list size: ";
+    std::cin >> n;
+    ForwardList<int> list;
+    for (int i = 0; i < n; i++)
+    {
+        list.push_front(rand() % 100);
+    }
+    // std::cout << "Список заполнен" << std::endl;
+    list.print();
+#endif // DESTRUCTOR_CHECK
+
+#ifdef HOME_WORK_1
+    int n;
+    std::cout << "Enter list size: ";
+    std::cin >> n;
+    ForwardList<int> list(n);
+    for (int i = 0; i < n; i++)
+    {
+        list[i] = rand() % 100;
+    }
+    for (int i = 0; i < n; i++)
+    {
+        std::cout << list[i] << tab;
+    }
+    std::cout << std::endl;
+#endif // HOME_WORK_1
+
+#ifdef HOME_WORK_2
+    ForwardList<int> list = { 3, 5, 8, 13, 3, 21, 5, 5, 6, 5, 13 };
+    list.unique();
+    list.reverse();
+    list.print();
+#endif // HOME_WORK_2
+
+#ifdef RANGE_BASE_FOR_LIST
+    ForwardList<int> list = { 3, 5, 8, 13, 21 };
+    for (int i : list)
+    {
+        std::cout << i << tab;
+    }
+    std::cout << std::endl;
+
+    ForwardList<int> l2{};
+    l2 = func();
+    l2 = list;
+    for (int i : l2)
+    {
+        std::cout << i << tab;
+    }
+    std::cout << std::endl;
+#endif // RANGE_BASE_FOR_LIST
 }
